@@ -1,0 +1,129 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RolUsuario {
+  CIUDADANO
+  FUNCIONARIO_TECNICO
+  ADMINISTRADOR
+}
+
+enum TipoTramite {
+  LICENCIA_AMBIENTAL_MUNICIPAL
+  AUTORIZACION_DESMONTE_CONTROLADO
+  CAMBIO_USO_SUELO
+  INSPECCION_CUENCA_HIDRICA
+  DENUNCIA_CONTAMINACION_CHAQUEO
+}
+
+enum EstadoTramite {
+  INGRESADO
+  EN_REVISION
+  EVALUACION_AMBIENTAL
+  OBSERVADO
+  APROBADO
+  RECHAZADO
+}
+
+enum NivelRiesgoAI {
+  BAJO_RIESGO
+  MEDIO_RIESGO
+  ALTO_RIESGO_SOCIOAMBIENTAL
+  PENDIENTE_CLASIFICACION_MANUAL
+}
+
+model Profile {
+  id           String      @id @default(uuid())
+  userId       String      @unique
+  email        String      @unique
+  nombre       String
+  ci           String?
+  telefono     String?
+  rol          RolUsuario  @default(CIUDADANO)
+  cargo        String?
+  municipioId  String      @default("SCZ-01")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tramitesRadicados Tramite[] @relation("CiudadanoTramites")
+  tramitesAsignados Tramite[] @relation("FuncionarioTramites")
+
+  @@map("profiles")
+}
+
+model Tramite {
+  id                    String        @id @default(uuid())
+  codigo                String        @unique
+  titulo                String
+  descripcion           String
+  tipoTramite           TipoTramite
+  estado                EstadoTramite @default(INGRESADO)
+  municipio             String        @default("Santa Cruz de la Sierra")
+  ubicacionDetalle      String?
+  latitud               Float?
+  longitud              Float?
+  ciudadanoId           String
+  funcionarioAsignadoId String?
+  nivelRiesgoAI         NivelRiesgoAI?
+  scoreRiesgoAI         Float?        @default(0.0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  ciudadano             Profile       @relation("CiudadanoTramites", fields: [ciudadanoId], references: [id])
+  funcionario           Profile?      @relation("FuncionarioTramites", fields: [funcionarioAsignadoId], references: [id])
+  documentos            DocumentoAdjunto[]
+  historial             HistorialTramite[]
+  analisisAI            AnalisisPredictivoAI?
+
+  @@map("tramites")
+}
+
+model DocumentoAdjunto {
+  id          String   @id @default(uuid())
+  tramiteId   String
+  nombre      String
+  fileUrl     String
+  tipoMime    String
+  tamanoBytes Int
+  createdAt   DateTime @default(now())
+
+  tramite     Tramite  @relation(fields: [tramiteId], references: [id], onDelete: Cascade)
+
+  @@map("documentos_adjuntos")
+}
+
+model HistorialTramite {
+  id             String         @id @default(uuid())
+  tramiteId      String
+  estadoAnterior EstadoTramite?
+  nuevoEstado    EstadoTramite
+  autorId        String
+  autorNombre    String
+  autorRol       String
+  observaciones  String?
+  timestamp      DateTime       @default(now())
+
+  tramite        Tramite        @relation(fields: [tramiteId], references: [id], onDelete: Cascade)
+
+  @@map("historial_tramites")
+}
+
+model AnalisisPredictivoAI {
+  id                 String        @id @default(uuid())
+  tramiteId          String        @unique
+  nivelRiesgo        NivelRiesgoAI
+  scoreConfianza     Float
+  factoresDetectados String
+  recomendaciones    String
+  modeloVersion      String        @default("ai-socioambiental-v1.0")
+  createdAt          DateTime      @default(now())
+
+  tramite            Tramite       @relation(fields: [tramiteId], references: [id], onDelete: Cascade)
+
+  @@map("analisis_predictivo_ai")
+}
